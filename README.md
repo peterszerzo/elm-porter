@@ -2,6 +2,14 @@
 
 Port message manager that emulate a request-response style communication, a'la `Http.send Response request`.
 
+## Example
+
+Run the example like so:
+
+`cd ./example`
+`elm-reactor`
+`http://localhost:8000/index.html`
+
 ## How it works
 
 ```elm
@@ -38,7 +46,7 @@ init =
 -- Message includes Porter's message
 
 type Msg
-  = PorterMsg Porter.Msg
+  = PorterMsg (Porter.Msg String String Msg)
   | Receive String
 
 -- Update porter accordingly

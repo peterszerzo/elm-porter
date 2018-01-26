@@ -1,0 +1,16 @@
+<body>
+<script src="/_compile/Example.elm"></script>
+<script>
+  const app = Elm.Example.fullscreen()
+  app.ports.outgoing.subscribe(msgWithId => {
+    const id = msgWithId.id
+    const request = msgWithId.msg
+    const response = request.split("").reverse().join("")
+    // Simply include the same `id` and the response under the `msg` key.
+    app.ports.incoming.send({
+      id: id,
+      msg: response
+    })
+  })
+</script>
+</body>
