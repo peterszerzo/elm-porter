@@ -7,8 +7,10 @@ Port message manager that emulate a request-response style communication, a'la `
 Run the example like so:
 
 `cd ./example`
+
 `elm-reactor`
-`http://localhost:8000/index.html`
+
+Navigate to: `http://localhost:8000/index.html`
 
 ## How it works
 
