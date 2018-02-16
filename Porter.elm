@@ -21,7 +21,6 @@ module Porter exposing (Model, Config, Msg, subscriptions, init, update, send)
 
 import Dict
 import Task
-import Random
 import Json.Encode as Encode
 import Json.Decode as Decode
 
@@ -33,7 +32,10 @@ type alias MsgId =
 {-| Porter model, used to keep track of response handlers.
 -}
 type Model req res msg
-    = Model (ResponseHandlerMap res msg)
+    = Model
+        { handlers : ResponseHandlerMap res msg
+        , nextId : Int
+        }
 
 
 {-| Porter configuration, containing ports and message encoders/decoders.
@@ -50,7 +52,10 @@ type alias Config req res msg =
 -}
 init : Model req res msg
 init =
-    Model Dict.empty
+    Model
+        { handlers = Dict.empty
+        , nextId = 0
+        }
 
 
 type alias ResponseHandlerMap res msg =
@@ -68,7 +73,7 @@ encode encodeReq id msg =
 {-| Module messages.
 -}
 type Msg req res msg
-    = NewRandomId (res -> msg) req MsgId
+    = SendWithNextId (res -> msg) req
     | Receive Encode.Value
 
 
@@ -83,9 +88,9 @@ subscriptions config =
 -}
 send : (res -> msg) -> req -> Cmd (Msg req res msg)
 send responseHandler msg =
-    Random.generate
-        (NewRandomId responseHandler msg)
-        (Random.int 0 100000)
+    SendWithNextId responseHandler msg
+        |> Task.succeed
+        |> Task.perform identity
 
 
 {-| Update port model based on local messages. Returns a new port model and a local command that must be mapped to the parent message.
@@ -93,9 +98,14 @@ send responseHandler msg =
 update : Config req res msg -> Msg req res msg -> Model req res msg -> ( Model req res msg, Cmd msg )
 update config msg (Model model) =
     case msg of
-        NewRandomId responseHandler msg id ->
-            ( Model (Dict.insert id responseHandler model)
-            , config.outgoingPort (encode config.encodeRequest id msg)
+        SendWithNextId responseHandler msg ->
+            ( Model
+                -- We use the nextID from the model and increment the nextId so
+                -- we'll use a distinct ID next time
+                { handlers = Dict.insert model.nextId responseHandler model.handlers
+                , nextId = model.nextId + 1
+                }
+            , config.outgoingPort (encode config.encodeRequest model.nextId msg)
             )
 
         Receive val ->
@@ -107,11 +117,10 @@ update config msg (Model model) =
                     )
                 |> Result.map
                     (\( id, res ) ->
-                        Dict.get id model
+                        Dict.get id model.handlers
                             |> Maybe.map
                                 (\handleResponse ->
-                                    ( Model
-                                        (Dict.remove id model)
+                                    ( Model { model | handlers = Dict.remove id model.handlers }
                                     , Task.perform handleResponse (Task.succeed res)
                                     )
                                 )
