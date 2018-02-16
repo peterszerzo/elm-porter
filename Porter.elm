@@ -19,7 +19,7 @@ module Porter exposing (Model, Config, Msg, subscriptions, init, update, send)
 
 -}
 
-import Dict
+import Dict exposing (Dict)
 import Task
 import Json.Encode as Encode
 import Json.Decode as Decode
@@ -93,20 +93,52 @@ send responseHandler msg =
         |> Task.perform identity
 
 
+{-| In theory, Elm Ints can go as high as 2^53, but it's safer in the long
+run to limit them to 2^32.
+-}
+maxSignedInt : Int
+maxSignedInt =
+    2147483647
+
+
+{-| Given what we think the next ID shoud be, return a safe ID, where:
+
+  - the ID wraps back to 0 after the safe max Int
+  - we check that the proposed ID is unused.
+
+We would only absolutely need to check if the ID had been used if we've wrapped
+around, so we could keep track of that if it made any real performance
+difference.
+
+-}
+safeId : Int -> Dict Int a -> Int
+safeId proposed used =
+    if proposed >= maxSignedInt then
+        safeId 0 used
+    else if Dict.member proposed used then
+        safeId (proposed + 1) used
+    else
+        proposed
+
+
 {-| Update port model based on local messages. Returns a new port model and a local command that must be mapped to the parent message.
 -}
 update : Config req res msg -> Msg req res msg -> Model req res msg -> ( Model req res msg, Cmd msg )
 update config msg (Model model) =
     case msg of
         SendWithNextId responseHandler msg ->
-            ( Model
-                -- We use the nextID from the model and increment the nextId so
-                -- we'll use a distinct ID next time
-                { handlers = Dict.insert model.nextId responseHandler model.handlers
-                , nextId = model.nextId + 1
-                }
-            , config.outgoingPort (encode config.encodeRequest model.nextId msg)
-            )
+            let
+                id =
+                    safeId model.nextId model.handlers
+            in
+                ( Model
+                    -- We remember the next ID we ought to propose, though we
+                    -- will check it then before using it.
+                    { handlers = Dict.insert id responseHandler model.handlers
+                    , nextId = id + 1
+                    }
+                , config.outgoingPort (encode config.encodeRequest id msg)
+                )
 
         Receive val ->
             val
