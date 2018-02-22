@@ -19,9 +19,8 @@ module Porter exposing (Model, Config, Msg, subscriptions, init, update, send)
 
 -}
 
-import Dict
+import Dict exposing (Dict)
 import Task
-import Random
 import Json.Encode as Encode
 import Json.Decode as Decode
 
@@ -33,7 +32,10 @@ type alias MsgId =
 {-| Porter model, used to keep track of response handlers.
 -}
 type Model req res msg
-    = Model (ResponseHandlerMap res msg)
+    = Model
+        { handlers : ResponseHandlerMap res msg
+        , nextId : Int
+        }
 
 
 {-| Porter configuration, containing ports and message encoders/decoders.
@@ -50,7 +52,10 @@ type alias Config req res msg =
 -}
 init : Model req res msg
 init =
-    Model Dict.empty
+    Model
+        { handlers = Dict.empty
+        , nextId = 0
+        }
 
 
 type alias ResponseHandlerMap res msg =
@@ -68,7 +73,7 @@ encode encodeReq id msg =
 {-| Module messages.
 -}
 type Msg req res msg
-    = NewRandomId (res -> msg) req MsgId
+    = SendWithNextId (res -> msg) req
     | Receive Encode.Value
 
 
@@ -83,9 +88,37 @@ subscriptions config =
 -}
 send : (res -> msg) -> req -> Cmd (Msg req res msg)
 send responseHandler msg =
-    Random.generate
-        (NewRandomId responseHandler msg)
-        (Random.int 0 100000)
+    SendWithNextId responseHandler msg
+        |> Task.succeed
+        |> Task.perform identity
+
+
+{-| In theory, Elm Ints can go as high as 2^53, but it's safer in the long
+run to limit them to 2^32.
+-}
+maxSignedInt : Int
+maxSignedInt =
+    2147483647
+
+
+{-| Given what we think the next ID shoud be, return a safe ID, where:
+
+  - the ID wraps back to 0 after the safe max Int
+  - we check that the proposed ID is unused.
+
+We would only absolutely need to check if the ID had been used if we've wrapped
+around, so we could keep track of that if it made any real performance
+difference.
+
+-}
+safeId : Int -> Dict Int a -> Int
+safeId proposed used =
+    if proposed >= maxSignedInt then
+        safeId 0 used
+    else if Dict.member proposed used then
+        safeId (proposed + 1) used
+    else
+        proposed
 
 
 {-| Update port model based on local messages. Returns a new port model and a local command that must be mapped to the parent message.
@@ -93,10 +126,19 @@ send responseHandler msg =
 update : Config req res msg -> Msg req res msg -> Model req res msg -> ( Model req res msg, Cmd msg )
 update config msg (Model model) =
     case msg of
-        NewRandomId responseHandler msg id ->
-            ( Model (Dict.insert id responseHandler model)
-            , config.outgoingPort (encode config.encodeRequest id msg)
-            )
+        SendWithNextId responseHandler msg ->
+            let
+                id =
+                    safeId model.nextId model.handlers
+            in
+                ( Model
+                    -- We remember the next ID we ought to propose, though we
+                    -- will check it then before using it.
+                    { handlers = Dict.insert id responseHandler model.handlers
+                    , nextId = id + 1
+                    }
+                , config.outgoingPort (encode config.encodeRequest id msg)
+                )
 
         Receive val ->
             val
@@ -107,11 +149,10 @@ update config msg (Model model) =
                     )
                 |> Result.map
                     (\( id, res ) ->
-                        Dict.get id model
+                        Dict.get id model.handlers
                             |> Maybe.map
                                 (\handleResponse ->
-                                    ( Model
-                                        (Dict.remove id model)
+                                    ( Model { model | handlers = Dict.remove id model.handlers }
                                     , Task.perform handleResponse (Task.succeed res)
                                     )
                                 )
