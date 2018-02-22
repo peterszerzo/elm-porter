@@ -1,5 +1,5 @@
 {
-    "version": "1.0.0",
+    "version": "1.0.1",
     "summary": "Elm ports' wrapper for uncomplicated request-response-style communication",
     "repository": "https://github.com/peterszerzo/elm-porter.git",
     "license": "BSD3",
