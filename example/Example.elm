@@ -23,6 +23,7 @@ porterConfig =
     -- Porter works with a single Request and Response data types. They can both be anything, as long as you supply decoders :)
     , encodeRequest = Encode.string
     , decodeResponse = Decode.string
+    , porterMsg = PorterMsg
     }
 
 
@@ -42,7 +43,7 @@ init =
       , response = ""
       }
       -- Send a request through porter, specifying the response handler directly
-    , Porter.send Receive "Reverse me!" |> Cmd.map PorterMsg
+    , Porter.send porterConfig Receive "Reverse me!"
     )
 
 
@@ -79,7 +80,7 @@ update msg model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Porter.subscriptions porterConfig |> Sub.map PorterMsg
+    Porter.subscriptions porterConfig
 
 
 
