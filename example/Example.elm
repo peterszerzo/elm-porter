@@ -47,8 +47,8 @@ init =
     -- , Porter.send porterConfig Receive "Reverse me!"
           ,
           Porter.request ("Reverse me!")
-          |> Porter.andThen (\reversed_str -> reversed_str ++ " The Quick Brown Fox!")
-          |> Porter.andThen (\reversed_str -> reversed_str ++ " A man a plan a canal: panama")
+          |> Porter.andThen (\reversed_str -> Porter.request <| reversed_str ++ " The Quick Brown Fox!")
+          |> Porter.andThen (\reversed_str -> Porter.request <| reversed_str ++ " A man a plan a canal: panama")
           |> Porter.sendRequest porterConfig Receive
     )
 

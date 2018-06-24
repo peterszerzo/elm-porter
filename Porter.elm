@@ -28,6 +28,10 @@ module Porter exposing
 
 @docs send
 
+# Build a complex chain of requests and finally send it
+
+@docs request, andThen, sendRequest
+
 -}
 
 import Dict exposing (Dict)
@@ -95,12 +99,12 @@ type Msg req res msg
 
 {-| Internal type used by requests that have a response handler.
 -}
-type FullRequest req res msg = FullRequest req (List (res -> req)) (res -> msg)
+type FullRequest req res msg = FullRequest req (List (res -> Request req res)) (res -> msg)
 
 {-| Opaque type of a 'request'. Use the `request` function to create one,
 chain them using `andThen` and finally send it using `sendRequest`.
 -}
-type Request req res = Request req (List (res -> req))
+type Request req res = Request req (List (res -> Request req res))
 
 
 {-| Subscribe to messages from ports.
@@ -128,9 +132,17 @@ request req = Request req []
 {-| Chains two Porter requests together:
     Run a second one right away when the first returns using its result in the request.
 -}
-andThen : (res -> req) -> Request req res -> Request req res
+andThen : (res -> Request req res) -> Request req res -> Request req res
 andThen reqfun (Request initial_req reqfuns) = Request initial_req (reqfun :: reqfuns)
 
+map func reqA =
+    reqA
+        |> andThen (\a -> request (func a))
+
+map2 func reqA reqB =
+  reqA
+      |> andThen (\a -> reqB
+      |> andThen (\b -> request (func a b)))
 
 {-| Sends a request earlier started using `request`.
 -}
@@ -223,8 +235,16 @@ handleResponse config (Model model) id res (FullRequest msg mappers finalRespons
           , Task.perform finalResponseHandler (Task.succeed res)
           )
         (mapper :: mappers) ->
+            let
+                request =
+                    mapper res
+                extractMsg (Request msg _) = msg
+                extractMappers (Request _ req_mappers) = req_mappers
+            in
           ( Model { model | handlers = Dict.remove id model.handlers }
-          , Task.succeed (FullRequest (mapper res) mappers finalResponseHandler)
-              |> Task.map SendWithNextId
-              |> Task.perform config.porterMsg
+          -- , Task.succeed (FullRequest (mapper res) mappers finalResponseHandler)
+          --     |> Task.map SendWithNextId
+          --     |> Task.perform config.porterMsg
+                -- , sendRequest config request finalResponseHandler
+          , runSendRequest config (FullRequest (extractMsg request) (extractMappers request) finalResponseHandler)
           )
