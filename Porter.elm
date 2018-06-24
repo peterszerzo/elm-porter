@@ -1,4 +1,15 @@
-module Porter exposing (Model, Config, Msg, subscriptions, init, update, send)
+module Porter exposing
+    (Model
+    , Config
+    , Msg
+    , subscriptions
+    , init
+    , update
+    , send
+    , request
+    , andThen
+    , sendRequest
+    )
 
 {-| Port message manager to emulate a request-response style communication through ports, a'la `Http.send ResponseHandler request`.
 
@@ -85,16 +96,22 @@ type Msg req res msg
 type Request req res msg = Request req (List (res -> req)) (res -> msg)
 type PartialRequest req res = PartialRequest req (List (res -> req))
 
+request : req -> PartialRequest req res
 request req = PartialRequest req []
 
-andThen (PartialRequest initial_req reqfuns) reqfun = PartialRequest initial_req (reqfun :: reqfuns)
+andThen : (res -> req) -> PartialRequest req res -> PartialRequest req res
+andThen reqfun (PartialRequest initial_req reqfuns) = PartialRequest initial_req (reqfun :: reqfuns)
 
-sendRequest : Config req res msg -> (PartialRequest req res) -> (res -> msg) -> Cmd msg
-sendRequest config (PartialRequest req reqfuns) response_handler =
+sendRequest : Config req res msg -> (res -> msg) -> (PartialRequest req res) -> Cmd msg
+sendRequest config response_handler (PartialRequest req reqfuns)  =
     let
         request = Request req (List.reverse reqfuns) response_handler
     in
-        Debug.crash "Not Implemented"
+        SendWithNextId request
+            |> Task.succeed
+            |> Task.perform identity
+            |> Cmd.map config.porterMsg
+
 
 {-| Subscribe to messages from ports.
 -}

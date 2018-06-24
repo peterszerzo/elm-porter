@@ -44,7 +44,12 @@ init =
       , response = ""
       }
       -- Send a request through porter, specifying the response handler directly
-    , Porter.send porterConfig Receive "Reverse me!"
+    -- , Porter.send porterConfig Receive "Reverse me!"
+          ,
+          Porter.request ("Reverse me!")
+          |> Porter.andThen (\reversed_str -> reversed_str ++ " The Quick Brown Fox!")
+          |> Porter.andThen (\reversed_str -> reversed_str ++ " A man a plan a canal: panama")
+          |> Porter.sendRequest porterConfig Receive
     )
 
 
