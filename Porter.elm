@@ -173,12 +173,32 @@ update config msg (Model model) =
                 |> Result.map
                     (\( id, res ) ->
                         Dict.get id model.handlers
-                            |> Maybe.map
-                                (\( Request msg todo_mappers handleResponse ) ->
-                                    ( Model { model | handlers = Dict.remove id model.handlers }
-                                    , Task.perform handleResponse (Task.succeed res)
-                                    )
-                                )
+                            |> Maybe.map (handle_update config (Model model) id res)
+                                -- (\(Request msg mappers handleResponse) ->
+                                --      case mappers of
+                                --          [] ->
+                                --             ( Model { model | handlers = Dict.remove id model.handlers }
+                                --             , Task.perform handleResponse (Task.succeed res)
+                                --             )
+                                --          (mapper :: mappers) ->
+                                --             ( Model { model | handlers = Dict.remove id model.handlers }
+                                --             , Task.perform SendWithNextId (Task.succeed (Request (mapper res) mappers handleResponse))
+                                --             )
+                                -- )
                             |> Maybe.withDefault ( Model model, Cmd.none )
                     )
                 |> Result.withDefault ( Model model, Cmd.none )
+
+handle_update : Config req res msg -> Model req res msg -> MsgId -> res -> Request req res msg -> (Model req res msg, Cmd msg)
+handle_update config (Model model) id res (Request msg mappers handleResponse) =
+    case mappers of
+        [] ->
+          ( Model { model | handlers = Dict.remove id model.handlers }
+          , Task.perform handleResponse (Task.succeed res)
+          )
+        (mapper :: mappers) ->
+          ( Model { model | handlers = Dict.remove id model.handlers }
+          , Task.succeed (Request (mapper res) mappers handleResponse)
+              |> Task.map SendWithNextId
+              |> Task.perform config.porterMsg
+          )
