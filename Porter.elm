@@ -76,7 +76,7 @@ init =
 
 
 type alias ResponseHandlerMap req res msg =
-    Dict.Dict MsgId (Request req res msg)
+    Dict.Dict MsgId (FullRequest req res msg)
 
 
 encode : (req -> Encode.Value) -> MsgId -> req -> Encode.Value
@@ -90,27 +90,17 @@ encode encodeReq id msg =
 {-| Module messages.
 -}
 type Msg req res msg
-    = SendWithNextId (Request req res msg)
+    = SendWithNextId (FullRequest req res msg)
     | Receive Encode.Value
 
-type Request req res msg = Request req (List (res -> req)) (res -> msg)
-type PartialRequest req res = PartialRequest req (List (res -> req))
+{-| Internal type used by requests that have a response handler.
+-}
+type FullRequest req res msg = FullRequest req (List (res -> req)) (res -> msg)
 
-request : req -> PartialRequest req res
-request req = PartialRequest req []
-
-andThen : (res -> req) -> PartialRequest req res -> PartialRequest req res
-andThen reqfun (PartialRequest initial_req reqfuns) = PartialRequest initial_req (reqfun :: reqfuns)
-
-sendRequest : Config req res msg -> (res -> msg) -> (PartialRequest req res) -> Cmd msg
-sendRequest config response_handler (PartialRequest req reqfuns)  =
-    let
-        request = Request req (List.reverse reqfuns) response_handler
-    in
-        SendWithNextId request
-            |> Task.succeed
-            |> Task.perform identity
-            |> Cmd.map config.porterMsg
+{-| Opaque type of a 'request'. Use the `request` function to create one,
+chain them using `andThen` and finally send it using `sendRequest`.
+-}
+type Request req res = Request req (List (res -> req))
 
 
 {-| Subscribe to messages from ports.
@@ -125,7 +115,35 @@ subscriptions config =
 -}
 send : Config req res msg -> (res -> msg) -> req -> Cmd msg
 send config responseHandler request =
-    SendWithNextId (Request request [] responseHandler)
+    runSendRequest config (FullRequest request [] responseHandler)
+
+
+{-| Starts a request that can be sent at a later time using `sendRequest`,
+    and that can be combined using `andThen`.
+-}
+request : req -> Request req res
+request req = Request req []
+
+
+{-| Chains two Porter requests together:
+    Run a second one right away when the first returns using its result in the request.
+-}
+andThen : (res -> req) -> Request req res -> Request req res
+andThen reqfun (Request initial_req reqfuns) = Request initial_req (reqfun :: reqfuns)
+
+
+{-| Sends a request earlier started using `request`.
+-}
+sendRequest : Config req res msg -> (res -> msg) -> (Request req res) -> Cmd msg
+sendRequest config response_handler (Request req reqfuns)  =
+    runSendRequest config (FullRequest req (List.reverse reqfuns) response_handler)
+
+
+{-| Internal function that performs the specified request as a command.
+ -}
+runSendRequest : Config req res msg -> FullRequest req res msg -> Cmd msg
+runSendRequest config request =
+    SendWithNextId request
         |> Task.succeed
         |> Task.perform identity
         |> Cmd.map config.porterMsg
@@ -168,7 +186,7 @@ update config msg (Model model) =
             let
                 id =
                     safeId model.nextId model.handlers
-                extractMsg (Request message _ _ ) = message
+                extractMsg (FullRequest message _ _ ) = message
                 msg = extractMsg request
             in
                 ( Model
@@ -190,32 +208,23 @@ update config msg (Model model) =
                 |> Result.map
                     (\( id, res ) ->
                         Dict.get id model.handlers
-                            |> Maybe.map (handle_update config (Model model) id res)
-                                -- (\(Request msg mappers handleResponse) ->
-                                --      case mappers of
-                                --          [] ->
-                                --             ( Model { model | handlers = Dict.remove id model.handlers }
-                                --             , Task.perform handleResponse (Task.succeed res)
-                                --             )
-                                --          (mapper :: mappers) ->
-                                --             ( Model { model | handlers = Dict.remove id model.handlers }
-                                --             , Task.perform SendWithNextId (Task.succeed (Request (mapper res) mappers handleResponse))
-                                --             )
-                                -- )
+                            |> Maybe.map (handleResponse config (Model model) id res)
                             |> Maybe.withDefault ( Model model, Cmd.none )
                     )
                 |> Result.withDefault ( Model model, Cmd.none )
 
-handle_update : Config req res msg -> Model req res msg -> MsgId -> res -> Request req res msg -> (Model req res msg, Cmd msg)
-handle_update config (Model model) id res (Request msg mappers handleResponse) =
+{-| Internal function that chains the steps of a FullRequest after one another.
+-}
+handleResponse : Config req res msg -> Model req res msg -> MsgId -> res -> FullRequest req res msg -> (Model req res msg, Cmd msg)
+handleResponse config (Model model) id res (FullRequest msg mappers finalResponseHandler) =
     case mappers of
         [] ->
           ( Model { model | handlers = Dict.remove id model.handlers }
-          , Task.perform handleResponse (Task.succeed res)
+          , Task.perform finalResponseHandler (Task.succeed res)
           )
         (mapper :: mappers) ->
           ( Model { model | handlers = Dict.remove id model.handlers }
-          , Task.succeed (Request (mapper res) mappers handleResponse)
+          , Task.succeed (FullRequest (mapper res) mappers finalResponseHandler)
               |> Task.map SendWithNextId
               |> Task.perform config.porterMsg
           )
