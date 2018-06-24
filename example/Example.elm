@@ -23,6 +23,7 @@ porterConfig =
     -- Porter works with a single Request and Response data types. They can both be anything, as long as you supply decoders :)
     , encodeRequest = Encode.string
     , decodeResponse = Decode.string
+    -- Porter uses a message added to your Msg type for its internal communications (See `type Msg` below)
     , porterMsg = PorterMsg
     }
 
