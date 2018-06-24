@@ -142,3 +142,16 @@ app.ports.outgoing.subscribe(msgWithId => {
   })
 })
 ```
+
+## Chaining Requests
+
+If you want to perform multiple requests where some of these request depend on responses from other requests, you can use `Porter.request` in combination with `Porter.andThen` and `Porter.sendRequest`.
+
+```elm
+Porter.request ("Reverse me too!")
+  |> Porter.andThen (\reversed_str -> Porter.request (reversed_str ++ " The Quick Brown Fox!"))
+  |> Porter.andThen (\reversed_str -> Porter.request (reversed_str ++ " A man a plan a canal: panama"))
+  |> Porter.sendRequest porterConfig Receive
+```
+
+`Porter.map`, `Porter.map2` and `Porter.map3` are also available.

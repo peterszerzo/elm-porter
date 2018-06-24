@@ -53,8 +53,8 @@ init =
 
               -- Or send multiple requests one after the other:
               , Porter.request ("Reverse me too!")
-                |> Porter.andThen (\reversed_str -> Porter.request <| reversed_str ++ " The Quick Brown Fox!")
-                |> Porter.andThen (\reversed_str -> Porter.request <| reversed_str ++ " A man a plan a canal: panama")
+                |> Porter.andThen (\reversed_str -> Porter.request (reversed_str ++ " The Quick Brown Fox!"))
+                |> Porter.andThen (\reversed_str -> Porter.request (reversed_str ++ " A man a plan a canal: panama"))
                 |> Porter.sendRequest porterConfig Receive2
             ]
     )
