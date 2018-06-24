@@ -33,7 +33,7 @@ type alias MsgId =
 -}
 type Model req res msg
     = Model
-        { handlers : ResponseHandlerMap res msg
+        { handlers : ResponseHandlerMap req res msg
         , nextId : Int
         }
 
@@ -64,8 +64,8 @@ init =
         }
 
 
-type alias ResponseHandlerMap res msg =
-    Dict.Dict MsgId (res -> msg)
+type alias ResponseHandlerMap req res msg =
+    Dict.Dict MsgId (Request req res msg)
 
 
 encode : (req -> Encode.Value) -> MsgId -> req -> Encode.Value
@@ -79,7 +79,7 @@ encode encodeReq id msg =
 {-| Module messages.
 -}
 type Msg req res msg
-    = SendWithNextId (res -> msg) req
+    = SendWithNextId (Request req res msg)
     | Receive Encode.Value
 
 type Request req res msg = Request req (List (res -> req)) (res -> msg)
@@ -107,8 +107,8 @@ subscriptions config =
 {-| Initiate a message send.
 -}
 send : Config req res msg -> (res -> msg) -> req -> Cmd msg
-send config responseHandler msg =
-    SendWithNextId responseHandler msg
+send config responseHandler request =
+    SendWithNextId (Request request [] responseHandler)
         |> Task.succeed
         |> Task.perform identity
         |> Cmd.map config.porterMsg
@@ -147,15 +147,17 @@ safeId proposed used =
 update : Config req res msg -> Msg req res msg -> Model req res msg -> ( Model req res msg, Cmd msg )
 update config msg (Model model) =
     case msg of
-        SendWithNextId responseHandler msg ->
+        SendWithNextId (request) ->
             let
                 id =
                     safeId model.nextId model.handlers
+                extractMsg (Request message _ _ ) = message
+                msg = extractMsg request
             in
                 ( Model
                     -- We remember the next ID we ought to propose, though we
                     -- will check it then before using it.
-                    { handlers = Dict.insert id responseHandler model.handlers
+                    { handlers = Dict.insert id request model.handlers
                     , nextId = id + 1
                     }
                 , config.outgoingPort (encode config.encodeRequest id msg)
@@ -172,7 +174,7 @@ update config msg (Model model) =
                     (\( id, res ) ->
                         Dict.get id model.handlers
                             |> Maybe.map
-                                (\handleResponse ->
+                                (\( Request msg todo_mappers handleResponse ) ->
                                     ( Model { model | handlers = Dict.remove id model.handlers }
                                     , Task.perform handleResponse (Task.succeed res)
                                     )
