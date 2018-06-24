@@ -82,6 +82,19 @@ type Msg req res msg
     = SendWithNextId (res -> msg) req
     | Receive Encode.Value
 
+type Request req res msg = Request req (List (res -> req)) (res -> msg)
+type PartialRequest req res = PartialRequest req (List (res -> req))
+
+request req = PartialRequest req []
+
+andThen (PartialRequest initial_req reqfuns) reqfun = PartialRequest initial_req (reqfun :: reqfuns)
+
+sendRequest : Config req res msg -> (PartialRequest req res) -> (res -> msg) -> Cmd msg
+sendRequest config (PartialRequest req reqfuns) response_handler =
+    let
+        request = Request req (List.reverse reqfuns) response_handler
+    in
+        Debug.crash "Not Implemented"
 
 {-| Subscribe to messages from ports.
 -}
