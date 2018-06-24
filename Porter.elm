@@ -260,9 +260,5 @@ handleResponse config (Model model) id res (FullRequest msg mappers finalRespons
                 extractMappers (Request _ req_mappers) = req_mappers
             in
           ( Model { model | handlers = Dict.remove id model.handlers }
-          -- , Task.succeed (FullRequest (mapper res) mappers finalResponseHandler)
-          --     |> Task.map SendWithNextId
-          --     |> Task.perform config.porterMsg
-                -- , sendRequest config request finalResponseHandler
-          , runSendRequest config (FullRequest (extractMsg request) (extractMappers request) finalResponseHandler)
+          , runSendRequest config (FullRequest (extractMsg request) ((extractMappers request) ++ mappers) finalResponseHandler)
           )
