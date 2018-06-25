@@ -1,18 +1,19 @@
-module Porter exposing
-    (Model
-    , Config
-    , Msg
-    , subscriptions
-    , init
-    , update
-    , send
-    , request
-    , andThen
-    , sendRequest
-    , map
-    , map2
-    , map3
-    )
+module Porter
+    exposing
+        ( Model
+        , Config
+        , Msg
+        , subscriptions
+        , init
+        , update
+        , send
+        , request
+        , andThen
+        , sendRequest
+        , map
+        , map2
+        , map3
+        )
 
 {-| Port message manager to emulate a request-response style communication through ports, a'la `Http.send ResponseHandler request`.
 
@@ -30,6 +31,7 @@ module Porter exposing
 # Send messages
 
 @docs send
+
 
 # Build a complex chain of requests and finally send it
 
@@ -58,9 +60,9 @@ type Model req res msg
 
 {-| Porter configuration, containing:
 
-- ports
-- message encoders/decoders.
-- the message that porter will use for its internal communications
+  - ports
+  - message encoders/decoders.
+  - the message that porter will use for its internal communications
 
 -}
 type alias Config req res msg =
@@ -100,14 +102,18 @@ type Msg req res msg
     = SendWithNextId (FullRequest req res msg)
     | Receive Encode.Value
 
+
 {-| Internal type used by requests that have a response handler.
 -}
-type FullRequest req res msg = FullRequest req (List (res -> Request req res)) (res -> msg)
+type FullRequest req res msg
+    = FullRequest req (List (res -> Request req res)) (res -> msg)
+
 
 {-| Opaque type of a 'request'. Use the `request` function to create one,
 chain them using `andThen` and finally send it using `sendRequest`.
 -}
-type Request req res = Request req (List (res -> Request req res))
+type Request req res
+    = Request req (List (res -> Request req res))
 
 
 {-| Subscribe to messages from ports.
@@ -126,51 +132,56 @@ send config responseHandler request =
 
 
 {-| Starts a request that can be sent at a later time using `sendRequest`,
-    and that can be combined using `andThen`.
+and that can be combined using `andThen`.
 -}
 request : req -> Request req res
-request req = Request req []
+request req =
+    Request req []
 
 
 {-| Chains two Porter requests together:
-    Run a second one right away when the first returns using its result in the request.
+Run a second one right away when the first returns using its result in the request.
 -}
 andThen : (res -> Request req res) -> Request req res -> Request req res
-andThen reqfun (Request initial_req reqfuns) = Request initial_req (reqfun :: reqfuns)
+andThen reqfun (Request initial_req reqfuns) =
+    Request initial_req (reqfun :: reqfuns)
+
 
 {-| Transforms a request
-
 -}
 map : (res -> req) -> Request req res -> Request req res
 map func reqA =
     reqA
         |> andThen (\a -> request (func a))
 
+
 {-| Run a request using the results of two earlier requests.
- -}
+-}
 map2 : (res -> res -> req) -> Request req res -> Request req res -> Request req res
 map2 func reqA reqB =
-  reqA
-      |> andThen (\a -> reqB
-      |> andThen (\b -> request (func a b)))
+    reqA
+        |> andThen (\a -> reqB
+        |> andThen (\b -> request (func a b)))
 
-{-|-}
+
+{-| -}
 map3 : (res -> res -> res -> req) -> Request req res -> Request req res -> Request req res -> Request req res
 map3 func reqA reqB reqC =
-  reqA
-    |> andThen (\a -> reqB
-    |> andThen (\b -> reqC
-    |> andThen (\c -> request (func a b c))))
+    reqA
+      |> andThen (\a -> reqB
+      |> andThen (\b -> reqC
+      |> andThen (\c -> request (func a b c))))
+
 
 {-| Sends a request earlier started using `request`.
 -}
-sendRequest : Config req res msg -> (res -> msg) -> (Request req res) -> Cmd msg
-sendRequest config response_handler (Request req reqfuns)  =
+sendRequest : Config req res msg -> (res -> msg) -> Request req res -> Cmd msg
+sendRequest config response_handler (Request req reqfuns) =
     runSendRequest config (FullRequest req (List.reverse reqfuns) response_handler)
 
 
 {-| Internal function that performs the specified request as a command.
- -}
+-}
 runSendRequest : Config req res msg -> FullRequest req res msg -> Cmd msg
 runSendRequest config request =
     SendWithNextId request
@@ -212,12 +223,16 @@ safeId proposed used =
 update : Config req res msg -> Msg req res msg -> Model req res msg -> ( Model req res msg, Cmd msg )
 update config msg (Model model) =
     case msg of
-        SendWithNextId (request) ->
+        SendWithNextId request ->
             let
                 id =
                     safeId model.nextId model.handlers
-                extractMsg (FullRequest message _ _ ) = message
-                msg = extractMsg request
+
+                extractMsg (FullRequest message _ _) =
+                    message
+
+                msg =
+                    extractMsg request
             in
                 ( Model
                     -- We remember the next ID we ought to propose, though we
@@ -243,22 +258,28 @@ update config msg (Model model) =
                     )
                 |> Result.withDefault ( Model model, Cmd.none )
 
+
 {-| Internal function that chains the steps of a FullRequest after one another.
 -}
-handleResponse : Config req res msg -> Model req res msg -> MsgId -> res -> FullRequest req res msg -> (Model req res msg, Cmd msg)
+handleResponse : Config req res msg -> Model req res msg -> MsgId -> res -> FullRequest req res msg -> ( Model req res msg, Cmd msg )
 handleResponse config (Model model) id res (FullRequest msg mappers finalResponseHandler) =
     case mappers of
         [] ->
-          ( Model { model | handlers = Dict.remove id model.handlers }
-          , Task.perform finalResponseHandler (Task.succeed res)
-          )
-        (mapper :: mappers) ->
+            ( Model { model | handlers = Dict.remove id model.handlers }
+            , Task.perform finalResponseHandler (Task.succeed res)
+            )
+
+        mapper :: mappers ->
             let
                 request =
                     mapper res
-                extractMsg (Request msg _) = msg
-                extractMappers (Request _ req_mappers) = req_mappers
+
+                extractMsg (Request msg _) =
+                    msg
+
+                extractMappers (Request _ req_mappers) =
+                    req_mappers
             in
-          ( Model { model | handlers = Dict.remove id model.handlers }
-          , runSendRequest config (FullRequest (extractMsg request) ((extractMappers request) ++ mappers) finalResponseHandler)
-          )
+                ( Model { model | handlers = Dict.remove id model.handlers }
+                , runSendRequest config (FullRequest (extractMsg request) ((extractMappers request) ++ mappers) finalResponseHandler)
+                )
