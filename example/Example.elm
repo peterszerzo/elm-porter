@@ -36,7 +36,7 @@ porterConfig =
 type alias Model =
     { porter : Porter.Model String String Msg
     , response : String
-    , advanced_response : String
+    , advancedResponse : String
     }
 
 
@@ -44,7 +44,7 @@ init : ( Model, Cmd Msg )
 init =
     ( { porter = Porter.init
       , response = ""
-      , advanced_response = ""
+      , advancedResponse = ""
       }
     , Cmd.batch
         [ -- Send a request through porter, specifying the response handler directly
@@ -52,9 +52,9 @@ init =
 
         -- Or send multiple requests one after the other:
         , Porter.request ("Reverse me too!")
-            |> Porter.andThen (\reversed_str -> Porter.request (reversed_str ++ " The Quick Brown Fox!"))
-            |> Porter.andThen (\reversed_str -> Porter.request (reversed_str ++ " A man a plan a canal: panama"))
-            |> Porter.sendRequest porterConfig Receive2
+            |> Porter.andThen (\reversedStr -> Porter.request (reversedStr ++ " The Quick Brown Fox!"))
+            |> Porter.andThen (\reversedStr -> Porter.request (reversedStr ++ " A man a plan a canal: panama"))
+            |> Porter.sendRequest porterConfig ReceiveAdvanced
         ]
     )
 
@@ -66,7 +66,7 @@ init =
 type Msg
     = PorterMsg (Porter.Msg String String Msg)
     | Receive String
-    | Receive2 String
+    | ReceiveAdvanced String
 
 
 
@@ -86,8 +86,8 @@ update msg model =
         Receive response ->
             ( { model | response = response }, Cmd.none )
 
-        Receive2 response ->
-            ( { model | advanced_response = response }, Cmd.none )
+        ReceiveAdvanced response ->
+            ( { model | advancedResponse = response }, Cmd.none )
 
 
 

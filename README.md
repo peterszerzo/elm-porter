@@ -149,8 +149,8 @@ If you want to perform multiple requests where some of these request depend on r
 
 ```elm
 Porter.request ("Reverse me too!")
-  |> Porter.andThen (\reversed_str -> Porter.request (reversed_str ++ " The Quick Brown Fox!"))
-  |> Porter.andThen (\reversed_str -> Porter.request (reversed_str ++ " A man a plan a canal: panama"))
+  |> Porter.andThen (\reversedStr -> Porter.request (reversedStr ++ " The Quick Brown Fox!"))
+  |> Porter.andThen (\reversedStr -> Porter.request (reversedStr ++ " A man a plan a canal: panama"))
   |> Porter.sendRequest porterConfig Receive
 ```
 

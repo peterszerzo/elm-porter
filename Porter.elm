@@ -85,7 +85,7 @@ init =
 
 
 type alias ResponseHandlerMap req res msg =
-    Dict.Dict MsgId (FullRequest req res msg)
+    Dict.Dict MsgId (RequestWithHandler req res msg)
 
 
 encode : (req -> Encode.Value) -> MsgId -> req -> Encode.Value
@@ -99,14 +99,14 @@ encode encodeReq id msg =
 {-| Module messages.
 -}
 type Msg req res msg
-    = SendWithNextId (FullRequest req res msg)
+    = SendWithNextId (RequestWithHandler req res msg)
     | Receive Encode.Value
 
 
 {-| Internal type used by requests that have a response handler.
 -}
-type FullRequest req res msg
-    = FullRequest req (List (res -> Request req res)) (res -> msg)
+type RequestWithHandler req res msg
+    = RequestWithHandler req (List (res -> Request req res)) (res -> msg)
 
 
 {-| Opaque type of a 'request'. Use the `request` function to create one,
@@ -128,7 +128,7 @@ subscriptions config =
 -}
 send : Config req res msg -> (res -> msg) -> req -> Cmd msg
 send config responseHandler request =
-    runSendRequest config (FullRequest request [] responseHandler)
+    runSendRequest config (RequestWithHandler request [] responseHandler)
 
 
 {-| Starts a request that can be sent at a later time using `sendRequest`,
@@ -177,12 +177,12 @@ map3 func reqA reqB reqC =
 -}
 sendRequest : Config req res msg -> (res -> msg) -> Request req res -> Cmd msg
 sendRequest config response_handler (Request req reqfuns) =
-    runSendRequest config (FullRequest req (List.reverse reqfuns) response_handler)
+    runSendRequest config (RequestWithHandler req (List.reverse reqfuns) response_handler)
 
 
 {-| Internal function that performs the specified request as a command.
 -}
-runSendRequest : Config req res msg -> FullRequest req res msg -> Cmd msg
+runSendRequest : Config req res msg -> RequestWithHandler req res msg -> Cmd msg
 runSendRequest config request =
     SendWithNextId request
         |> Task.succeed
@@ -228,7 +228,7 @@ update config msg (Model model) =
                 id =
                     safeId model.nextId model.handlers
 
-                extractMsg (FullRequest message _ _) =
+                extractMsg (RequestWithHandler message _ _) =
                     message
 
                 msg =
@@ -259,10 +259,10 @@ update config msg (Model model) =
                 |> Result.withDefault ( Model model, Cmd.none )
 
 
-{-| Internal function that chains the steps of a FullRequest after one another.
+{-| Internal function that chains the steps of a RequestWithHandler after one another.
 -}
-handleResponse : Config req res msg -> Model req res msg -> MsgId -> res -> FullRequest req res msg -> ( Model req res msg, Cmd msg )
-handleResponse config (Model model) id res (FullRequest msg mappers finalResponseHandler) =
+handleResponse : Config req res msg -> Model req res msg -> MsgId -> res -> RequestWithHandler req res msg -> ( Model req res msg, Cmd msg )
+handleResponse config (Model model) id res (RequestWithHandler msg mappers finalResponseHandler) =
     case mappers of
         [] ->
             ( Model { model | handlers = Dict.remove id model.handlers }
@@ -277,9 +277,9 @@ handleResponse config (Model model) id res (FullRequest msg mappers finalRespons
                 extractMsg (Request msg _) =
                     msg
 
-                extractMappers (Request _ req_mappers) =
-                    req_mappers
+                extractMappers (Request _ reqMappers) =
+                    reqMappers
             in
                 ( Model { model | handlers = Dict.remove id model.handlers }
-                , runSendRequest config (FullRequest (extractMsg request) ((extractMappers request) ++ mappers) finalResponseHandler)
+                , runSendRequest config (RequestWithHandler (extractMsg request) ((extractMappers request) ++ mappers) finalResponseHandler)
                 )
