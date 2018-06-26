@@ -38,13 +38,19 @@ type Model req res msg
         }
 
 
-{-| Porter configuration, containing ports and message encoders/decoders.
+{-| Porter configuration, containing:
+
+- ports
+- message encoders/decoders.
+- the message that porter will use for its internal communications
+
 -}
 type alias Config req res msg =
     { outgoingPort : Encode.Value -> Cmd msg
     , incomingPort : (Encode.Value -> Msg req res msg) -> Sub (Msg req res msg)
     , encodeRequest : req -> Encode.Value
     , decodeResponse : Decode.Decoder res
+    , porterMsg : Msg req res msg -> msg
     }
 
 
@@ -79,18 +85,20 @@ type Msg req res msg
 
 {-| Subscribe to messages from ports.
 -}
-subscriptions : Config req res msg -> Sub (Msg req res msg)
+subscriptions : Config req res msg -> Sub msg
 subscriptions config =
     config.incomingPort Receive
+        |> Sub.map config.porterMsg
 
 
 {-| Initiate a message send.
 -}
-send : (res -> msg) -> req -> Cmd (Msg req res msg)
-send responseHandler msg =
+send : Config req res msg -> (res -> msg) -> req -> Cmd msg
+send config responseHandler msg =
     SendWithNextId responseHandler msg
         |> Task.succeed
         |> Task.perform identity
+        |> Cmd.map config.porterMsg
 
 
 {-| In theory, Elm Ints can go as high as 2^53, but it's safer in the long
