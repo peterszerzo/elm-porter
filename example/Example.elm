@@ -48,13 +48,13 @@ init =
       }
     , Cmd.batch
         [ -- Send a request through porter, specifying the response handler directly
-          Porter.send porterConfig Receive "Reverse me!"
+          Porter.send porterConfig Receive (Porter.request "Reverse me!")
 
         -- Or send multiple requests one after the other:
         , Porter.request ("Reverse me too!")
             |> Porter.andThen (\reversedStr -> Porter.request (reversedStr ++ " The Quick Brown Fox!"))
             |> Porter.andThen (\reversedStr -> Porter.request (reversedStr ++ " A man a plan a canal: panama"))
-            |> Porter.sendRequest porterConfig ReceiveAdvanced
+            |> Porter.send porterConfig ReceiveAdvanced
         ]
     )
 

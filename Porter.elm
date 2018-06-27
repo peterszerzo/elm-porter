@@ -10,10 +10,6 @@ module Porter
         , send
         , request
         , andThen
-        , sendRequest
-        , map
-        , map2
-        , map3
         )
 
 {-| Port message manager to emulate a request-response style communication through ports, a'la `Http.send ResponseHandler request`.
@@ -28,17 +24,14 @@ module Porter
 
 @docs Model, Msg, init, update, subscriptions
 
-
 # Send messages
 
-@docs send
-
-
-# Build a complex chain of requests and finally send it
-
 @docs Request
+@docs request, andThen, send
 
-@docs request, andThen, sendRequest, map, map2, map3
+
+
+
 
 -}
 
@@ -127,13 +120,6 @@ subscriptions config =
         |> Sub.map config.porterMsg
 
 
-{-| Initiate a message send.
--}
-send : Config req res msg -> (res -> msg) -> req -> Cmd msg
-send config responseHandler request =
-    runSendRequest config (RequestWithHandler request [] responseHandler)
-
-
 {-| Starts a request that can be sent at a later time using `sendRequest`,
 and that can be combined using `andThen`.
 -}
@@ -150,36 +136,10 @@ andThen reqfun (Request initial_req reqfuns) =
     Request initial_req (reqfun :: reqfuns)
 
 
-{-| Transforms a request
--}
-map : (res -> req) -> Request req res -> Request req res
-map func reqA =
-    reqA
-        |> andThen (\a -> request (func a))
-
-
-{-| Run a request using the results of two earlier requests.
--}
-map2 : (res -> res -> req) -> Request req res -> Request req res -> Request req res
-map2 func reqA reqB =
-    reqA
-        |> andThen (\a -> reqB
-        |> andThen (\b -> request (func a b)))
-
-
-{-| -}
-map3 : (res -> res -> res -> req) -> Request req res -> Request req res -> Request req res -> Request req res
-map3 func reqA reqB reqC =
-    reqA
-      |> andThen (\a -> reqB
-      |> andThen (\b -> reqC
-      |> andThen (\c -> request (func a b c))))
-
-
 {-| Sends a request earlier started using `request`.
 -}
-sendRequest : Config req res msg -> (res -> msg) -> Request req res -> Cmd msg
-sendRequest config response_handler (Request req reqfuns) =
+send: Config req res msg -> (res -> msg) -> Request req res -> Cmd msg
+send config response_handler (Request req reqfuns) =
     runSendRequest config (RequestWithHandler req (List.reverse reqfuns) response_handler)
 
 

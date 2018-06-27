@@ -61,7 +61,7 @@ init =
       , response = ""
       }
       -- Send a request through porter, specifying the response handler directly
-    , Porter.send porterConfig Receive "Reverse me!"
+      , Porter.send porterConfig Receive (Porter.request "Reverse me!")
     )
 
 
@@ -154,4 +154,19 @@ Porter.request ("Reverse me too!")
   |> Porter.sendRequest porterConfig Receive
 ```
 
-`Porter.map`, `Porter.map2` and `Porter.map3` are also available.
+
+## Changelog
+
+###  2.0
+
+- The `Porter.Config` type now has a `porterMsg`-field.
+- Signature of `Porter.send` was changed: 
+  - It now takes the `porterConfig` as argument, meaning (in combination with the previous change) that `Cmd.map`ping the result to your Msg type is no longer necessary because this is handled for you.
+  - Requests are now constructed using `Porter.request` and can be chained using `Porter.andThen` before passing them off to `Porter.send`. 
+
+So: Where in Version 1 you'd use `Porter.send responseHandler request`, you'd now use `Porter.send porterConfig responseHandler (Porter.request request)`.
+
+
+### 1.0
+
+First stable release
