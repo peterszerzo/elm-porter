@@ -3,6 +3,7 @@ module Porter
         ( Model
         , Config
         , Msg
+        , Request
         , subscriptions
         , init
         , update
@@ -34,6 +35,8 @@ module Porter
 
 
 # Build a complex chain of requests and finally send it
+
+@docs Request
 
 @docs request, andThen, sendRequest, map, map2, map3
 
