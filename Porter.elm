@@ -106,7 +106,7 @@ type RequestWithHandler req res msg
 
 
 {-| Opaque type of a 'request'. Use the `request` function to create one,
-chain them using `andThen` and finally send it using `sendRequest`.
+chain them using `andThen` and finally send it using `send`.
 -}
 type Request req res
     = Request req (List (res -> Request req res))
@@ -120,7 +120,7 @@ subscriptions config =
         |> Sub.map config.porterMsg
 
 
-{-| Starts a request that can be sent at a later time using `sendRequest`,
+{-| Starts a request that can be sent at a later time using `send`,
 and that can be combined using `andThen`.
 -}
 request : req -> Request req res
