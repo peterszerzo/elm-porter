@@ -132,15 +132,15 @@ request req =
 Run a second one right away when the first returns using its result in the request.
 -}
 andThen : (res -> Request req res) -> Request req res -> Request req res
-andThen reqfun (Request initial_req reqfuns) =
-    Request initial_req (reqfun :: reqfuns)
+andThen reqfun (Request initialReq reqfuns) =
+    Request initialReq (reqfun :: reqfuns)
 
 
 {-| Sends a request earlier started using `request`.
 -}
 send: Config req res msg -> (res -> msg) -> Request req res -> Cmd msg
-send config response_handler (Request req reqfuns) =
-    runSendRequest config (RequestWithHandler req (List.reverse reqfuns) response_handler)
+send config responseHandler (Request req reqfuns) =
+    runSendRequest config (RequestWithHandler req (List.reverse reqfuns) responseHandler)
 
 
 {-| Internal function that performs the specified request as a command.
