@@ -61,7 +61,7 @@ init =
       , response = ""
       }
       -- Send a request through porter, specifying the response handler directly
-    , Porter.send porterConfig Receive "Reverse me!"
+      , Porter.send porterConfig Receive (Porter.request "Reverse me!")
     )
 
 
@@ -142,3 +142,31 @@ app.ports.outgoing.subscribe(msgWithId => {
   })
 })
 ```
+
+## Chaining Requests
+
+If you want to perform multiple requests where some of these request depend on responses from other requests, you can use `Porter.request` in combination with `Porter.andThen` and `Porter.sendRequest`.
+
+```elm
+Porter.request ("Reverse me too!")
+  |> Porter.andThen (\reversedStr -> Porter.request (reversedStr ++ " The Quick Brown Fox!"))
+  |> Porter.andThen (\reversedStr -> Porter.request (reversedStr ++ " A man a plan a canal: panama"))
+  |> Porter.sendRequest porterConfig Receive
+```
+
+
+## Changelog
+
+###  2.0
+
+- The `Porter.Config` type now has a `porterMsg`-field.
+- Signature of `Porter.send` was changed: 
+  - It now takes the `porterConfig` as argument, meaning (in combination with the previous change) that `Cmd.map`ping the result to your Msg type is no longer necessary because this is handled for you.
+  - Requests are now constructed using `Porter.request` and can be chained using `Porter.andThen` before passing them off to `Porter.send`. 
+
+So: Where in Version 1 you'd use `Porter.send responseHandler request`, you'd now use `Porter.send porterConfig responseHandler (Porter.request request)`.
+
+
+### 1.0
+
+First stable release

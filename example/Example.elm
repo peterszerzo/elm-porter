@@ -23,6 +23,7 @@ porterConfig =
     -- Porter works with a single Request and Response data types. They can both be anything, as long as you supply decoders :)
     , encodeRequest = Encode.string
     , decodeResponse = Decode.string
+
     -- Porter uses a message added to your Msg type for its internal communications (See `type Msg` below)
     , porterMsg = PorterMsg
     }
@@ -35,6 +36,7 @@ porterConfig =
 type alias Model =
     { porter : Porter.Model String String Msg
     , response : String
+    , advancedResponse : String
     }
 
 
@@ -42,9 +44,18 @@ init : ( Model, Cmd Msg )
 init =
     ( { porter = Porter.init
       , response = ""
+      , advancedResponse = ""
       }
-      -- Send a request through porter, specifying the response handler directly
-    , Porter.send porterConfig Receive "Reverse me!"
+    , Cmd.batch
+        [ -- Send a request through porter, specifying the response handler directly
+          Porter.send porterConfig Receive (Porter.request "Reverse me!")
+
+        -- Or send multiple requests one after the other:
+        , Porter.request ("Reverse me too!")
+            |> Porter.andThen (\reversedStr -> Porter.request (reversedStr ++ " The Quick Brown Fox!"))
+            |> Porter.andThen (\reversedStr -> Porter.request (reversedStr ++ " A man a plan a canal: panama"))
+            |> Porter.send porterConfig ReceiveAdvanced
+        ]
     )
 
 
@@ -55,6 +66,7 @@ init =
 type Msg
     = PorterMsg (Porter.Msg String String Msg)
     | Receive String
+    | ReceiveAdvanced String
 
 
 
@@ -73,6 +85,9 @@ update msg model =
 
         Receive response ->
             ( { model | response = response }, Cmd.none )
+
+        ReceiveAdvanced response ->
+            ( { model | advancedResponse = response }, Cmd.none )
 
 
 

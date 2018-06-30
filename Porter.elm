@@ -1,4 +1,16 @@
-module Porter exposing (Model, Config, Msg, subscriptions, init, update, send)
+module Porter
+    exposing
+        ( Model
+        , Config
+        , Msg
+        , Request
+        , subscriptions
+        , init
+        , update
+        , send
+        , request
+        , andThen
+        )
 
 {-| Port message manager to emulate a request-response style communication through ports, a'la `Http.send ResponseHandler request`.
 
@@ -12,10 +24,14 @@ module Porter exposing (Model, Config, Msg, subscriptions, init, update, send)
 
 @docs Model, Msg, init, update, subscriptions
 
-
 # Send messages
 
-@docs send
+@docs Request
+@docs request, andThen, send
+
+
+
+
 
 -}
 
@@ -33,16 +49,16 @@ type alias MsgId =
 -}
 type Model req res msg
     = Model
-        { handlers : ResponseHandlerMap res msg
+        { handlers : ResponseHandlerMap req res msg
         , nextId : Int
         }
 
 
 {-| Porter configuration, containing:
 
-- ports
-- message encoders/decoders.
-- the message that porter will use for its internal communications
+  - ports
+  - message encoders/decoders.
+  - the message that porter will use for its internal communications
 
 -}
 type alias Config req res msg =
@@ -64,8 +80,8 @@ init =
         }
 
 
-type alias ResponseHandlerMap res msg =
-    Dict.Dict MsgId (res -> msg)
+type alias ResponseHandlerMap req res msg =
+    Dict.Dict MsgId (RequestWithHandler req res msg)
 
 
 encode : (req -> Encode.Value) -> MsgId -> req -> Encode.Value
@@ -79,8 +95,21 @@ encode encodeReq id msg =
 {-| Module messages.
 -}
 type Msg req res msg
-    = SendWithNextId (res -> msg) req
+    = SendWithNextId (RequestWithHandler req res msg)
     | Receive Encode.Value
+
+
+{-| Internal type used by requests that have a response handler.
+-}
+type RequestWithHandler req res msg
+    = RequestWithHandler req (List (res -> Request req res)) (res -> msg)
+
+
+{-| Opaque type of a 'request'. Use the `request` function to create one,
+chain them using `andThen` and finally send it using `send`.
+-}
+type Request req res
+    = Request req (List (res -> Request req res))
 
 
 {-| Subscribe to messages from ports.
@@ -91,11 +120,34 @@ subscriptions config =
         |> Sub.map config.porterMsg
 
 
-{-| Initiate a message send.
+{-| Starts a request that can be sent at a later time using `send`,
+and that can be combined using `andThen`.
 -}
-send : Config req res msg -> (res -> msg) -> req -> Cmd msg
-send config responseHandler msg =
-    SendWithNextId responseHandler msg
+request : req -> Request req res
+request req =
+    Request req []
+
+
+{-| Chains two Porter requests together:
+Run a second one right away when the first returns using its result in the request.
+-}
+andThen : (res -> Request req res) -> Request req res -> Request req res
+andThen reqfun (Request initialReq reqfuns) =
+    Request initialReq (reqfun :: reqfuns)
+
+
+{-| Sends a request earlier started using `request`.
+-}
+send: Config req res msg -> (res -> msg) -> Request req res -> Cmd msg
+send config responseHandler (Request req reqfuns) =
+    runSendRequest config (RequestWithHandler req (List.reverse reqfuns) responseHandler)
+
+
+{-| Internal function that performs the specified request as a command.
+-}
+runSendRequest : Config req res msg -> RequestWithHandler req res msg -> Cmd msg
+runSendRequest config request =
+    SendWithNextId request
         |> Task.succeed
         |> Task.perform identity
         |> Cmd.map config.porterMsg
@@ -134,15 +186,21 @@ safeId proposed used =
 update : Config req res msg -> Msg req res msg -> Model req res msg -> ( Model req res msg, Cmd msg )
 update config msg (Model model) =
     case msg of
-        SendWithNextId responseHandler msg ->
+        SendWithNextId request ->
             let
                 id =
                     safeId model.nextId model.handlers
+
+                extractMsg (RequestWithHandler message _ _) =
+                    message
+
+                msg =
+                    extractMsg request
             in
                 ( Model
                     -- We remember the next ID we ought to propose, though we
                     -- will check it then before using it.
-                    { handlers = Dict.insert id responseHandler model.handlers
+                    { handlers = Dict.insert id request model.handlers
                     , nextId = id + 1
                     }
                 , config.outgoingPort (encode config.encodeRequest id msg)
@@ -158,12 +216,33 @@ update config msg (Model model) =
                 |> Result.map
                     (\( id, res ) ->
                         Dict.get id model.handlers
-                            |> Maybe.map
-                                (\handleResponse ->
-                                    ( Model { model | handlers = Dict.remove id model.handlers }
-                                    , Task.perform handleResponse (Task.succeed res)
-                                    )
-                                )
+                            |> Maybe.map (handleResponse config (Model model) id res)
                             |> Maybe.withDefault ( Model model, Cmd.none )
                     )
                 |> Result.withDefault ( Model model, Cmd.none )
+
+
+{-| Internal function that chains the steps of a RequestWithHandler after one another.
+-}
+handleResponse : Config req res msg -> Model req res msg -> MsgId -> res -> RequestWithHandler req res msg -> ( Model req res msg, Cmd msg )
+handleResponse config (Model model) id res (RequestWithHandler msg mappers finalResponseHandler) =
+    case mappers of
+        [] ->
+            ( Model { model | handlers = Dict.remove id model.handlers }
+            , Task.perform finalResponseHandler (Task.succeed res)
+            )
+
+        mapper :: mappers ->
+            let
+                request =
+                    mapper res
+
+                extractMsg (Request msg _) =
+                    msg
+
+                extractMappers (Request _ reqMappers) =
+                    reqMappers
+            in
+                ( Model { model | handlers = Dict.remove id model.handlers }
+                , runSendRequest config (RequestWithHandler (extractMsg request) ((extractMappers request) ++ mappers) finalResponseHandler)
+                )
