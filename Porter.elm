@@ -24,14 +24,11 @@ module Porter
 
 @docs Model, Msg, init, update, subscriptions
 
+
 # Send messages
 
 @docs Request
 @docs request, andThen, send
-
-
-
-
 
 -}
 
@@ -39,7 +36,6 @@ import Dict exposing (Dict)
 import Task
 import Json.Encode as Encode
 import Json.Decode as Decode
-
 import Porter.Internals exposing (RequestWithHandler(..), Request(..), MultiRequest(..), Msg(..))
 
 
@@ -63,14 +59,9 @@ type Model req res msg
   - the message that porter will use for its internal communications
 
 -}
-type alias Config req res msg = Porter.Internals.Config req res msg
--- type alias Config req res msg =
---     { outgoingPort : Encode.Value -> Cmd msg
---     , incomingPort : (Encode.Value -> Msg req res msg) -> Sub (Msg req res msg)
---     , encodeRequest : req -> Encode.Value
---     , decodeResponse : Decode.Decoder res
---     , porterMsg : Msg req res msg -> msg
---     }
+type alias Config req res msg =
+    Porter.Internals.Config req res msg
+
 
 {-| Initialize model.
 -}
@@ -96,26 +87,21 @@ encode encodeReq id msg =
 
 {-| Module messages.
 -}
-type alias Msg req res msg = Porter.Internals.Msg req res msg
--- type Msg req res msg
---     = SendWithNextId (RequestWithHandler req res msg)
---     | Receive Encode.Value
---     | ResolveChain (MultiRequest req res msg)
+type alias Msg req res msg =
+    Porter.Internals.Msg req res msg
 
 
 {-| Internal type used by requests that have a response handler.
 -}
-type alias RequestWithHandler req res msg = Porter.Internals.RequestWithHandler req res msg
--- type RequestWithHandler req res msg
---     = RequestWithHandler req (List (res -> Request req res)) (res -> msg)
+type alias RequestWithHandler req res msg =
+    Porter.Internals.RequestWithHandler req res msg
 
 
 {-| Opaque type of a 'request'. Use the `request` function to create one,
 chain them using `andThen` and finally send it using `send`.
 -}
-type alias Request req res = Porter.Internals.Request req res
--- type Request req res
---     = Request req (List (res -> Request req res))
+type alias Request req res =
+    Porter.Internals.Request req res
 
 
 {-| Subscribe to messages from ports.
@@ -144,24 +130,9 @@ andThen reqfun (Request initialReq reqfuns) =
 
 {-| Sends a request earlier started using `request`.
 -}
-
-send: Config req res msg -> (res -> msg) -> Request req res -> Cmd msg
+send : Config req res msg -> (res -> msg) -> Request req res -> Cmd msg
 send config responseHandler request =
     Porter.Internals.send config responseHandler request
- 
--- send: Config req res msg -> (res -> msg) -> Request req res -> Cmd msg
--- send config responseHandler (Request req reqfuns) =
---     runSendRequest config (RequestWithHandler req (List.reverse reqfuns) responseHandler)
-
-
--- {-| Internal function that performs the specified request as a command.
--- -}
--- runSendRequest : Config req res msg -> RequestWithHandler req res msg -> Cmd msg
--- runSendRequest config request =
---     SendWithNextId request
---         |> Task.succeed
---         |> Task.perform identity
---         |> Cmd.map config.porterMsg
 
 
 {-| In theory, Elm Ints can go as high as 2^53, but it's safer in the long
@@ -231,8 +202,10 @@ update config msg (Model model) =
                             |> Maybe.withDefault ( Model model, Cmd.none )
                     )
                 |> Result.withDefault ( Model model, Cmd.none )
+
         ResolveChain multi_request ->
             ( Model model, Porter.Internals.multiSend config identity multi_request )
+
 
 {-| Internal function that chains the steps of a RequestWithHandler after one another.
 -}

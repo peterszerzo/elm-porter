@@ -51,54 +51,6 @@ type alias Request req res a =
     Porter.Internals.MultiRequest req res a
 
 
-
--- type Request req res a
--- = SimpleRequest (Porter.Request req res) (res -> a)
--- | ComplexRequest (Porter.Request req res) (res -> Request req res a)
--- | ShortCircuit a
--- | To configure Porter.Multi, you'll need:
--- 1.  An outgoingPort of the correct type
--- 2.  An incoming port of the correct type
--- 3.  A way to encode the request type into JSON
--- 4.  A way to decode the response JSON into an intermediate common 'res' type.
--- 5.  A `msg` that will be used to perform the internal chaining of requests.
--- type alias Config req res msg =
---     { outgoingPort : Encode.Value -> Cmd msg
---     , incomingPort : (Encode.Value -> Porter.Msg req res msg) -> Sub (Porter.Msg req res msg)
---     , encodeRequest : req -> Encode.Value
---     , decodeResponse : Decode.Decoder res
---     , porterMultiMsg : Msg req res msg -> msg
---     }
--- {-| Allows us to perform low-level Porter calls using the Porter.Multi configuration
--- Unless you know what you are doing, you probably don't need this ;-)
--- -}
--- configToPorterConfig : Config req res msg -> Porter.Config req res msg
--- configToPorterConfig config =
---     { porterMsg = (\msg -> (config.porterMultiMsg (PorterMsg msg)))
---     , outgoingPort = config.outgoingPort
---     , incomingPort = config.incomingPort
---     , encodeRequest = config.encodeRequest
---     , decodeResponse = config.decodeResponse
---     }
--- | The internal message type. Eiher:
---   - A low level Porter message
---   - One step in a multi-step request chain.
--- type alias Msg req res msg = Porter.Msg req res msg
--- type Msg req res msg
---     = PorterMsg (Porter.Msg req res msg)
---     | ResolveChain (Request req res msg)
--- | The Porter.Multi Model is used to keep track of state
--- across one or multiple port request<->response steps.
--- type alias Model req res msg = Porter.Model req res msg
--- type alias Model req res msg =
---     { porter_model : Porter.Model req res msg }
--- | Initializes a new Porter.Multi model.
--- Should probably be called as part of your program's `init` call.
--- init : Model req res msg
--- init =
---     { porter_model = Porter.init }
-
-
 {-| Creates a new Porter.Multi request, specifying:
 
   - the request itself in the common `req` type
@@ -106,8 +58,8 @@ type alias Request req res a =
 
 -}
 request : req -> (res -> a) -> Request req res a
-request req response_handler =
-    SimpleRequest (Porter.request req) response_handler
+request req responseHandler =
+    SimpleRequest (Porter.request req) responseHandler
 
 
 {-| Combines together multiple Porter.Multi requests
@@ -115,11 +67,11 @@ request req response_handler =
 andThen : (a -> Request req res b) -> Request req res a -> Request req res b
 andThen reqfun req =
     case req of
-        SimpleRequest porter_req request_mapper ->
-            ComplexRequest (porter_req) (request_mapper >> reqfun)
+        SimpleRequest porterReq requestMapper ->
+            ComplexRequest (porterReq) (requestMapper >> reqfun)
 
-        ComplexRequest porter_req next_request_fun ->
-            ComplexRequest porter_req (\res -> andThen reqfun (next_request_fun res))
+        ComplexRequest porterReq nextRequestFun ->
+            ComplexRequest porterReq (\res -> andThen reqfun (nextRequestFun res))
 
         ShortCircuit val ->
             reqfun val
@@ -140,12 +92,12 @@ andThenResult reqfun req =
         ShortCircuit (Ok val) ->
             (reqfun val)
 
-        SimpleRequest porter_req request_mapper ->
-            ComplexRequest (porter_req)
-                (request_mapper >> Result.Extra.unpack (ShortCircuit << Err) (reqfun))
+        SimpleRequest porterReq requestMapper ->
+            ComplexRequest (porterReq)
+                (requestMapper >> Result.Extra.unpack (ShortCircuit << Err) (reqfun))
 
-        ComplexRequest porter_req next_request_fun ->
-            ComplexRequest porter_req (\res -> andThenResult reqfun (next_request_fun res))
+        ComplexRequest porterReq nextRequestFun ->
+            ComplexRequest porterReq (\res -> andThenResult reqfun (nextRequestFun res))
 
 
 {-| Turns the request's specialized response type into a different type.
@@ -158,17 +110,17 @@ map mapfun req =
 {-| Chains two requests, and then combines their two responses into one new `c`.
 -}
 map2 : (a -> b -> c) -> Request req res a -> Request req res b -> Request req res c
-map2 mapfun req_a req_b =
-    req_a
-        |> andThen (\res_a -> req_b |> map (mapfun res_a))
+map2 mapfun reqA reqB =
+    reqA
+        |> andThen (\resA -> reqB |> map (mapfun resA))
 
 
 {-| Chains three requests, and then combines their three responses into one new `c`.
 -}
 map3 : (a -> b -> c -> d) -> Request req res a -> Request req res b -> Request req res c -> Request req res d
-map3 mapfun req_a req_b req_c =
-    req_a
-        |> andThen (\res_a -> map2 (mapfun res_a) req_b req_c)
+map3 mapfun reqA reqB reqC =
+    reqA
+        |> andThen (\resA -> map2 (mapfun resA) reqB reqC)
 
 
 {-| Actually sends a (chain of) request(s).
@@ -178,5 +130,5 @@ This `msg` will be called with the final resulting `a` once the final response h
 
 -}
 send : Config req res msg -> (a -> msg) -> Request req res a -> Cmd msg
-send config msg_handler request =
-    Porter.Internals.multiSend config msg_handler request
+send config msgHandler request =
+    Porter.Internals.multiSend config msgHandler request

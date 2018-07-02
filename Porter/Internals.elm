@@ -67,11 +67,11 @@ type alias Config req res msg =
 multiMap : (a -> b) -> MultiRequest req res a -> MultiRequest req res b
 multiMap mapfun req =
     case req of
-        SimpleRequest porter_req request_mapper ->
-            SimpleRequest porter_req (request_mapper >> mapfun)
+        SimpleRequest porterReq request_mapper ->
+            SimpleRequest porterReq (request_mapper >> mapfun)
 
-        ComplexRequest porter_req next_request_fun ->
-            ComplexRequest porter_req (\res -> multiMap mapfun (next_request_fun res))
+        ComplexRequest porterReq nextRequestFun ->
+            ComplexRequest porterReq (\res -> multiMap mapfun (nextRequestFun res))
 
         ShortCircuit val ->
             ShortCircuit (mapfun val)
@@ -87,21 +87,21 @@ multiMap mapfun req =
 
 
 multiSend : Config req res msg -> (a -> msg) -> MultiRequest req res a -> Cmd msg
-multiSend config msg_handler request =
+multiSend config msgHandler request =
     let
-        mapped_request =
-            request |> multiMap msg_handler
+        mappedRequest =
+            request |> multiMap msgHandler
     in
-        case mapped_request of
-            SimpleRequest porter_req response_handler ->
-                send (config) response_handler porter_req
+        case mappedRequest of
+            SimpleRequest porterReq responseHandler ->
+                send (config) responseHandler porterReq
 
-            ComplexRequest porter_req next_request_fun ->
+            ComplexRequest porterReq nextRequestFun ->
                 let
                     resfun res =
-                        config.porterMsg (ResolveChain (next_request_fun res))
+                        config.porterMsg (ResolveChain (nextRequestFun res))
                 in
-                    send (config) resfun porter_req
+                    send (config) resfun porterReq
 
             ShortCircuit val ->
                 val
