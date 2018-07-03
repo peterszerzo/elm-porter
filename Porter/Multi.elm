@@ -2,6 +2,7 @@ module Porter.Multi
     exposing
         ( Request
         , request
+        , fromSimple
         , andThen
         , andThenResult
         , map
@@ -22,6 +23,7 @@ Mapping over responses and chaining requests is supported.
 
 @docs Request
 @docs request, send
+@docs fromSimple
 
 
 # Chain Requests
@@ -60,6 +62,13 @@ type alias Request req res a =
 request : req -> (res -> a) -> Request req res a
 request req responseHandler =
     SimpleRequest (Porter.request req) responseHandler
+
+
+{-| Turns a simple Porter request into a Porter.Multi request
+-}
+fromSimple : Porter.Request req res -> Request req res res
+fromSimple request =
+    SimpleRequest request identity
 
 
 {-| Combines together multiple Porter.Multi requests
