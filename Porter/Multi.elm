@@ -12,9 +12,10 @@ module Porter.Multi
         )
 
 {-| With `Porter.Multi` you can create requests that have specialized return values.
-Use this if the normal response types are not good enough for you.
 
-The setup is exactly the same as when using Porter normally; and just use the `request` and `send` commands that this module provides instead to create requests with specialized return types.
+This is an advanced usage pattern of Porter. For most use-cases, using Porter itself should be sufficient. If, however, you have a tangible issue with expressing chaining and transformations with your port messages, read along :).
+
+The setup is exactly the same as when using Porter normally. Just use the `request` and `send` commands that this module provides instead to create requests with specialized return types.
 
 Mapping over responses and chaining requests is supported.
 
