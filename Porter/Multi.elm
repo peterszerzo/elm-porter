@@ -31,16 +31,10 @@ Mapping over responses and chaining requests is supported.
 
 @docs andThen, andThenResult, map, map2, map3
 
-
-# Low-level Stuff
-
-@docs configToPorterConfig
-
 -}
 
 import Porter exposing (Model, Config)
-import Porter.Internals exposing (MultiRequest(..), Msg(..))
-import Result.Extra
+import Porter.Internals exposing (MultiRequest(..), Msg(..), unpackResult)
 
 
 {-| We can either:
@@ -104,7 +98,7 @@ andThenResult reqfun req =
 
         SimpleRequest porterReq requestMapper ->
             ComplexRequest (porterReq)
-                (requestMapper >> Result.Extra.unpack (ShortCircuit << Err) (reqfun))
+                (requestMapper >> unpackResult (ShortCircuit << Err) (reqfun))
 
         ComplexRequest porterReq nextRequestFun ->
             ComplexRequest porterReq (\res -> andThenResult reqfun (nextRequestFun res))

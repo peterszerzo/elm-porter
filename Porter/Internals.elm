@@ -8,6 +8,20 @@ import Json.Decode as Decode
 import Task
 
 
+{- Utilities -}
+
+
+unpackResult : (e -> b) -> (a -> b) -> Result e a -> b
+unpackResult mapError mapSuccess res =
+    case res of
+        Ok successValue ->
+            mapSuccess successValue
+
+        Err errorValue ->
+            mapError errorValue
+
+
+
 {- Internal type used by requests that have a response handler. -}
 
 
