@@ -1,5 +1,5 @@
 {
-    "version": "2.0.0",
+    "version": "2.1.0",
     "summary": "Elm ports' wrapper for uncomplicated request-response-style communication",
     "repository": "https://github.com/peterszerzo/elm-porter.git",
     "license": "BSD3",
@@ -7,7 +7,8 @@
         "."
     ],
     "exposed-modules": [
-        "Porter"
+        "Porter",
+        "Porter.Multi"
     ],
     "dependencies": {
         "elm-lang/core": "5.1.1 <= v < 6.0.0"
