@@ -1,16 +1,9 @@
-module Porter
-    exposing
-        ( Model
-        , Config
-        , Msg
-        , Request
-        , subscriptions
-        , init
-        , update
-        , send
-        , request
-        , andThen
-        )
+module Porter exposing
+    ( Config
+    , Model, Msg, init, update, subscriptions
+    , Request
+    , request, andThen, send
+    )
 
 {-| Port message manager to emulate a request-response style communication through ports, a'la `Http.send ResponseHandler request`.
 
@@ -33,10 +26,10 @@ module Porter
 -}
 
 import Dict exposing (Dict)
-import Task
-import Json.Encode as Encode
 import Json.Decode as Decode
-import Porter.Internals exposing (RequestWithHandler(..), Request(..), MultiRequest(..), Msg(..))
+import Json.Encode as Encode
+import Porter.Internals exposing (Msg(..), MultiRequest(..), Request(..), RequestWithHandler(..))
+import Task
 
 
 type alias MsgId =
@@ -131,8 +124,8 @@ andThen reqfun (Request initialReq reqfuns) =
 {-| Sends a request earlier started using `request`.
 -}
 send : Config req res msg -> (res -> msg) -> Request req res -> Cmd msg
-send config responseHandler request =
-    Porter.Internals.send config responseHandler request
+send config responseHandler req =
+    Porter.Internals.send config responseHandler req
 
 
 {-| In theory, Elm Ints can go as high as 2^53, but it's safer in the long
@@ -157,8 +150,10 @@ safeId : Int -> Dict Int a -> Int
 safeId proposed used =
     if proposed >= maxSignedInt then
         safeId 0 used
+
     else if Dict.member proposed used then
         safeId (proposed + 1) used
+
     else
         proposed
 
@@ -168,25 +163,22 @@ safeId proposed used =
 update : Config req res msg -> Msg req res msg -> Model req res msg -> ( Model req res msg, Cmd msg )
 update config msg (Model model) =
     case msg of
-        SendWithNextId request ->
+        SendWithNextId req ->
             let
                 id =
                     safeId model.nextId model.handlers
 
                 extractMsg (RequestWithHandler message _ _) =
                     message
-
-                msg =
-                    extractMsg request
             in
-                ( Model
-                    -- We remember the next ID we ought to propose, though we
-                    -- will check it then before using it.
-                    { handlers = Dict.insert id request model.handlers
-                    , nextId = id + 1
-                    }
-                , config.outgoingPort (encode config.encodeRequest id msg)
-                )
+            ( Model
+                -- We remember the next ID we ought to propose, though we
+                -- will check it then before using it.
+                { handlers = Dict.insert id req model.handlers
+                , nextId = id + 1
+                }
+            , config.outgoingPort (encode config.encodeRequest id (extractMsg req))
+            )
 
         Receive val ->
             val
@@ -217,17 +209,17 @@ handleResponse config (Model model) id res (RequestWithHandler msg mappers final
             , Task.perform finalResponseHandler (Task.succeed res)
             )
 
-        mapper :: mappers ->
+        mapper :: mappersTail ->
             let
-                request =
+                mappedResponse =
                     mapper res
 
-                extractMsg (Request msg _) =
+                extractMsg (Request unwrappedMsg _) =
                     msg
 
                 extractMappers (Request _ reqMappers) =
                     reqMappers
             in
-                ( Model { model | handlers = Dict.remove id model.handlers }
-                , Porter.Internals.runSendRequest config (RequestWithHandler (extractMsg request) ((extractMappers request) ++ mappers) finalResponseHandler)
-                )
+            ( Model { model | handlers = Dict.remove id model.handlers }
+            , Porter.Internals.runSendRequest config (RequestWithHandler (extractMsg mappedResponse) (extractMappers mappedResponse ++ mappersTail) finalResponseHandler)
+            )

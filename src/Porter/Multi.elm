@@ -1,15 +1,9 @@
-module Porter.Multi
-    exposing
-        ( Request
-        , request
-        , fromSimple
-        , andThen
-        , andThenResult
-        , map
-        , map2
-        , map3
-        , send
-        )
+module Porter.Multi exposing
+    ( Request
+    , request, send
+    , fromSimple
+    , andThen, andThenResult, map, map2, map3
+    )
 
 {-| With `Porter.Multi` you can create requests that have specialized return values.
 
@@ -33,8 +27,8 @@ Mapping over responses and chaining requests is supported.
 
 -}
 
-import Porter exposing (Model, Config)
-import Porter.Internals exposing (MultiRequest(..), Msg(..), unpackResult)
+import Porter exposing (Config, Model)
+import Porter.Internals exposing (Msg(..), MultiRequest(..), unpackResult)
 
 
 {-| We can either:
@@ -62,8 +56,8 @@ request req responseHandler =
 {-| Turns a simple Porter request into a Porter.Multi request
 -}
 fromSimple : Porter.Request req res -> Request req res res
-fromSimple request =
-    SimpleRequest request identity
+fromSimple req =
+    SimpleRequest req identity
 
 
 {-| Combines together multiple Porter.Multi requests
@@ -72,7 +66,7 @@ andThen : (a -> Request req res b) -> Request req res a -> Request req res b
 andThen reqfun req =
     case req of
         SimpleRequest porterReq requestMapper ->
-            ComplexRequest (porterReq) (requestMapper >> reqfun)
+            ComplexRequest porterReq (requestMapper >> reqfun)
 
         ComplexRequest porterReq nextRequestFun ->
             ComplexRequest porterReq (\res -> andThen reqfun (nextRequestFun res))
@@ -94,11 +88,11 @@ andThenResult reqfun req =
             ShortCircuit (Err val)
 
         ShortCircuit (Ok val) ->
-            (reqfun val)
+            reqfun val
 
         SimpleRequest porterReq requestMapper ->
-            ComplexRequest (porterReq)
-                (requestMapper >> unpackResult (ShortCircuit << Err) (reqfun))
+            ComplexRequest porterReq
+                (requestMapper >> unpackResult (ShortCircuit << Err) reqfun)
 
         ComplexRequest porterReq nextRequestFun ->
             ComplexRequest porterReq (\res -> andThenResult reqfun (nextRequestFun res))
@@ -134,5 +128,5 @@ This `msg` will be called with the final resulting `a` once the final response h
 
 -}
 send : Config req res msg -> (a -> msg) -> Request req res a -> Cmd msg
-send config msgHandler request =
-    Porter.Internals.multiSend config msgHandler request
+send config msgHandler req =
+    Porter.Internals.multiSend config msgHandler req

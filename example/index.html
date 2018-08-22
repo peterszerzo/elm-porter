@@ -1,19 +1,22 @@
 <!DOCTYPE html/>
 <html>
-    <body>
-        <script src="/_compile/Example.elm"></script>
-        <script>
-         const app = Elm.Example.fullscreen()
-         app.ports.outgoing.subscribe(msgWithId => {
-             const id = msgWithId.id
-             const request = msgWithId.msg
-             const response = request.split("").reverse().join("")
-             // Simply include the same `id` and the response under the `msg` key.
-             app.ports.incoming.send({
-                 id: id,
-                 msg: response
-             })
-         })
-        </script>
-    </body>
+  <body>
+    <div id="app"></div>
+    <script src="./out.js"></script>
+    <script>
+      const app = Elm.Example.init({
+        node: document.getElementById("app")
+      })
+      app.ports.outgoing.subscribe(msgWithId => {
+        const id = msgWithId.id
+        const request = msgWithId.msg
+        const response = request.split("").reverse().join("")
+        // Simply include the same `id` and the response under the `msg` key.
+        app.ports.incoming.send({
+          id: id,
+          msg: response
+        })
+      })
+     </script>
+  </body>
 </html>

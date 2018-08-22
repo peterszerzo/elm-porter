@@ -1,11 +1,12 @@
-module Porter.Internals exposing (..)
+module Porter.Internals exposing (Config, Msg(..), MultiRequest(..), Request(..), RequestWithHandler(..), multiMap, multiSend, runSendRequest, send, unpackResult)
 
 {-| Do not use this module directly!
 -}
 
-import Json.Encode as Encode
 import Json.Decode as Decode
+import Json.Encode as Encode
 import Task
+
 
 
 {- Utilities -}
@@ -106,21 +107,21 @@ multiSend config msgHandler request =
         mappedRequest =
             request |> multiMap msgHandler
     in
-        case mappedRequest of
-            SimpleRequest porterReq responseHandler ->
-                send (config) responseHandler porterReq
+    case mappedRequest of
+        SimpleRequest porterReq responseHandler ->
+            send config responseHandler porterReq
 
-            ComplexRequest porterReq nextRequestFun ->
-                let
-                    resfun res =
-                        config.porterMsg (ResolveChain (nextRequestFun res))
-                in
-                    send (config) resfun porterReq
+        ComplexRequest porterReq nextRequestFun ->
+            let
+                resfun res =
+                    config.porterMsg (ResolveChain (nextRequestFun res))
+            in
+            send config resfun porterReq
 
-            ShortCircuit val ->
-                val
-                    |> Task.succeed
-                    |> Task.perform identity
+        ShortCircuit val ->
+            val
+                |> Task.succeed
+                |> Task.perform identity
 
 
 

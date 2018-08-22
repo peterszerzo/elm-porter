@@ -1,9 +1,15 @@
-port module Example exposing (..)
+port module Example exposing (main)
 
-import Porter
-import Html exposing (Html, text)
-import Json.Encode as Encode
+import Browser
+import Html exposing (Html, li, p, text, ul)
 import Json.Decode as Decode
+import Json.Encode as Encode
+import Porter
+
+
+type alias Flags =
+    Encode.Value
+
 
 
 -- Configure Porter
@@ -40,8 +46,8 @@ type alias Model =
     }
 
 
-init : ( Model, Cmd Msg )
-init =
+init : Flags -> ( Model, Cmd Msg )
+init flags =
     ( { porter = Porter.init
       , response = ""
       , advancedResponse = ""
@@ -51,7 +57,7 @@ init =
           Porter.send porterConfig Receive (Porter.request "Reverse me!")
 
         -- Or send multiple requests one after the other:
-        , Porter.request ("Reverse me too!")
+        , Porter.request "Reverse me too!"
             |> Porter.andThen (\reversedStr -> Porter.request (reversedStr ++ " The Quick Brown Fox!"))
             |> Porter.andThen (\reversedStr -> Porter.request (reversedStr ++ " A man a plan a canal: panama"))
             |> Porter.send porterConfig ReceiveAdvanced
@@ -81,7 +87,7 @@ update msg model =
                 ( porterModel, porterCmd ) =
                     Porter.update porterConfig porterMsg model.porter
             in
-                ( { model | porter = porterModel }, porterCmd )
+            ( { model | porter = porterModel }, porterCmd )
 
         Receive response ->
             ( { model | response = response }, Cmd.none )
@@ -105,16 +111,19 @@ subscriptions model =
 
 view : Model -> Html Msg
 view model =
-    text (toString model)
+    ul []
+        [ li [] [ text model.response ]
+        , li [] [ text model.advancedResponse ]
+        ]
 
 
 
 --
 
 
-main : Program Never Model Msg
+main : Program Flags Model Msg
 main =
-    Html.program
+    Browser.element
         { init = init
         , update = update
         , subscriptions = subscriptions
