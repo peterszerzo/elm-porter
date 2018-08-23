@@ -195,8 +195,8 @@ update config msg (Model model) =
                     )
                 |> Result.withDefault ( Model model, Cmd.none )
 
-        ResolveChain multi_request ->
-            ( Model model, Porter.Internals.multiSend config identity multi_request )
+        ResolveChain multiRequest ->
+            ( Model model, Porter.Internals.multiSend config identity multiRequest )
 
 
 {-| Internal function that chains the steps of a RequestWithHandler after one another.
