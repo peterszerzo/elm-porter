@@ -215,7 +215,7 @@ handleResponse config (Model model) id res (RequestWithHandler msg mappers final
                     mapper res
 
                 extractMsg (Request unwrappedMsg _) =
-                    msg
+                    unwrappedMsg
 
                 extractMappers (Request _ reqMappers) =
                     reqMappers
