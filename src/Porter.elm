@@ -212,10 +212,10 @@ handleResponse config (Model model) id res (RequestWithHandler msg mappers final
         mapper :: mappersTail ->
             let
                 mappedResponse =
-                    mapper res
+                    mapper res |> Debug.log "mappedResponse"
 
                 extractMsg (Request unwrappedMsg _) =
-                    msg
+                    unwrappedMsg
 
                 extractMappers (Request _ reqMappers) =
                     reqMappers

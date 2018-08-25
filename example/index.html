@@ -8,9 +8,11 @@
         node: document.getElementById("app")
       })
       app.ports.outgoing.subscribe(msgWithId => {
+          console.log("msgWithId: ", msgWithId);
         const id = msgWithId.id
         const request = msgWithId.msg
         const response = request.split("").reverse().join("")
+          console.log("response: ", response);
         // Simply include the same `id` and the response under the `msg` key.
         app.ports.incoming.send({
           id: id,
