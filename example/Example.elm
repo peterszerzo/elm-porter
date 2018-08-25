@@ -54,10 +54,10 @@ init flags =
       }
     , Cmd.batch
         [ -- Send a request through porter, specifying the response handler directly
-          -- Porter.send porterConfig Receive (Porter.request "Reverse me!")
+          Porter.send porterConfig Receive (Porter.request "Reverse me!")
 
         -- Or send multiple requests one after the other:
-        Porter.request "Reverse me too!"
+        , Porter.request "Reverse me too!"
             |> Porter.andThen (\reversedStr -> Porter.request (reversedStr ++ " The Quick Brown Fox!"))
             |> Porter.andThen (\reversedStr -> Porter.request (reversedStr ++ " A man a plan a canal: panama"))
             |> Porter.send porterConfig ReceiveAdvanced
@@ -81,7 +81,7 @@ type Msg
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg |> Debug.log "update" of
+    case msg of
         PorterMsg porterMsg ->
             let
                 ( porterModel, porterCmd ) =
