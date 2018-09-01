@@ -3,7 +3,7 @@
     "name": "peterszerzo/elm-porter",
     "summary": "Elm ports' wrapper for uncomplicated request-response-style communication",
     "license": "BSD-3-Clause",
-    "version": "2.1.1",
+    "version": "2.1.2",
     "exposed-modules": [
         "Porter",
         "Porter.Multi"
