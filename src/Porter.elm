@@ -1,8 +1,9 @@
 module Porter exposing
     ( Config
     , Model, Msg, init, update, subscriptions
+    , map, map2, map3, andThen
     , Request
-    , request, andThen, send
+    , request, simpleRequest, succeed, send
     )
 
 {-| Port message manager to emulate a request-response style communication through ports, a'la `Http.send ResponseHandler request`.
@@ -18,17 +19,22 @@ module Porter exposing
 @docs Model, Msg, init, update, subscriptions
 
 
+# Transform messages
+
+@docs map, map2, map3, andThen
+
+
 # Send messages
 
 @docs Request
-@docs request, andThen, send
+@docs request, simpleRequest, succeed, send
 
 -}
 
 import Dict exposing (Dict)
 import Json.Decode as Decode
 import Json.Encode as Encode
-import Porter.Internals exposing (Msg(..), MultiRequest(..), Request(..), RequestWithHandler(..))
+import Porter.Internals exposing (Msg(..), MultiRequest(..), Request(..), RequestWithHandler(..), unpackResult)
 import Task
 
 
@@ -56,7 +62,7 @@ type alias Config req res msg =
     Porter.Internals.Config req res msg
 
 
-{-| Initialize model.
+{-| Initialize model
 -}
 init : Model req res msg
 init =
@@ -90,11 +96,89 @@ type alias RequestWithHandler req res msg =
     Porter.Internals.RequestWithHandler req res msg
 
 
-{-| Opaque type of a 'request'. Use the `request` function to create one,
-chain them using `andThen` and finally send it using `send`.
+{-| Opaque type for porter requests, where we can either:
+
+  - perform a single request, which will run the Porter Request and at the end turn the result into an `outputRes`. See [request](#request).
+  - perform multiple requests: At the end of this request, run a function on the output that generates the next request. Note that this is set up in such a way that only the type of the final request in the chain matters. See [andThen](#andThen).
+  - short-circuit: just pass on the value `outputRes` without doing any more requests. See [succeed](#succeed).
+
 -}
-type alias Request req res =
-    Porter.Internals.Request req res
+type alias Request req res outputRes =
+    Porter.Internals.MultiRequest req res outputRes
+
+
+{-| A simpler version of [request](#request) where the end result is not converted into a specialized type, but left the same.
+-}
+simpleRequest : req -> Request req res res
+simpleRequest =
+    request identity
+
+
+{-| Creates a new request, specifying:
+
+  - the request itself in the common `req` type
+  - a response handler function tha turns the common `res` type into a specialized `a`.
+
+-}
+request : (res -> outputRes) -> req -> Request req res outputRes
+request responseHandler req =
+    SimpleRequest (Request req []) responseHandler
+
+
+{-| Succeed with an `outputRes` value without making an actual request. This is especially useful inside [andThen](#andThen), where the request chain may need to shortcircuit because of the return value (e.g. should not update a record that hasn't been found).
+-}
+succeed : outputRes -> Request req res outputRes
+succeed =
+    ShortCircuit
+
+
+{-| Combines together multiple Porter.Multi requests
+-}
+andThen : (outputResA -> Request req res outputResB) -> Request req res outputResA -> Request req res outputResB
+andThen reqfun req =
+    case req of
+        SimpleRequest porterReq requestMapper ->
+            ComplexRequest porterReq (requestMapper >> reqfun)
+
+        ComplexRequest porterReq nextRequestFun ->
+            ComplexRequest porterReq (\res -> andThen reqfun (nextRequestFun res))
+
+        ShortCircuit val ->
+            reqfun val
+
+
+{-| Turns the request's specialized response type into a different type.
+-}
+map : (outputResA -> outputResB) -> Request req res outputResA -> Request req res outputResB
+map mapfun req =
+    Porter.Internals.multiMap mapfun req
+
+
+{-| Chains two requests, and then combines their two responses into one new `c`.
+-}
+map2 : (a -> b -> c) -> Request req res a -> Request req res b -> Request req res c
+map2 mapfun reqA reqB =
+    reqA
+        |> andThen (\resA -> reqB |> map (mapfun resA))
+
+
+{-| Chains three requests, and then combines their three responses into one new `c`.
+-}
+map3 : (a -> b -> c -> d) -> Request req res a -> Request req res b -> Request req res c -> Request req res d
+map3 mapfun reqA reqB reqC =
+    reqA
+        |> andThen (\resA -> map2 (mapfun resA) reqB reqC)
+
+
+{-| Actually sends a (chain of) request(s).
+
+A final handler needs to be specified that turns the final result into a `msg`.
+This `msg` will be called with the final resulting `a` once the final response has returned.
+
+-}
+send : Config req res msg -> (outputRes -> msg) -> Request req res outputRes -> Cmd msg
+send config msgHandler req =
+    Porter.Internals.multiSend config msgHandler req
 
 
 {-| Subscribe to messages from ports.
@@ -103,29 +187,6 @@ subscriptions : Config req res msg -> Sub msg
 subscriptions config =
     config.incomingPort Receive
         |> Sub.map config.porterMsg
-
-
-{-| Starts a request that can be sent at a later time using `send`,
-and that can be combined using `andThen`.
--}
-request : req -> Request req res
-request req =
-    Request req []
-
-
-{-| Chains two Porter requests together:
-Run a second one right away when the first returns using its result in the request.
--}
-andThen : (res -> Request req res) -> Request req res -> Request req res
-andThen reqfun (Request initialReq reqfuns) =
-    Request initialReq (reqfun :: reqfuns)
-
-
-{-| Sends a request earlier started using `request`.
--}
-send : Config req res msg -> (res -> msg) -> Request req res -> Cmd msg
-send config responseHandler req =
-    Porter.Internals.send config responseHandler req
 
 
 {-| In theory, Elm Ints can go as high as 2^53, but it's safer in the long
@@ -202,7 +263,7 @@ update config msg (Model model) =
 {-| Internal function that chains the steps of a RequestWithHandler after one another.
 -}
 handleResponse : Config req res msg -> Model req res msg -> MsgId -> res -> RequestWithHandler req res msg -> ( Model req res msg, Cmd msg )
-handleResponse config (Model model) id res (RequestWithHandler msg mappers finalResponseHandler) =
+handleResponse config (Model model) id res (RequestWithHandler req mappers finalResponseHandler) =
     case mappers of
         [] ->
             ( Model { model | handlers = Dict.remove id model.handlers }
@@ -214,12 +275,20 @@ handleResponse config (Model model) id res (RequestWithHandler msg mappers final
                 mappedResponse =
                     mapper res
 
-                extractMsg (Request unwrappedMsg _) =
-                    unwrappedMsg
+                newReq =
+                    case mappedResponse of
+                        Request unwrappedMsg _ ->
+                            unwrappedMsg
 
-                extractMappers (Request _ reqMappers) =
-                    reqMappers
+                newMappers =
+                    case mappedResponse of
+                        Request _ reqMappers ->
+                            reqMappers
             in
             ( Model { model | handlers = Dict.remove id model.handlers }
-            , Porter.Internals.runSendRequest config (RequestWithHandler (extractMsg mappedResponse) (extractMappers mappedResponse ++ mappersTail) finalResponseHandler)
+            , Porter.Internals.runSendRequest config
+                (RequestWithHandler newReq
+                    (newMappers ++ mappersTail)
+                    finalResponseHandler
+                )
             )
