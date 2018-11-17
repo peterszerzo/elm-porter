@@ -1,10 +1,22 @@
-module Porter.Internals exposing (Config, Msg(..), MultiRequest(..), Request(..), RequestWithHandler(..), multiMap, multiSend, runSendRequest, send, unpackResult)
+module Porter.Internals exposing
+    ( Config
+    , Msg(..)
+    , MultiRequest(..)
+    , Request(..)
+    , RequestWithHandler(..)
+    , multiMap
+    , multiSend
+    , runSendRequest
+    , send
+    , unpackResult
+    )
 
 {-| Internal utilities not exposed by the package
 -}
 
 import Json.Decode as Decode
 import Json.Encode as Encode
+import Process
 import Task
 
 
@@ -33,10 +45,10 @@ type Request req res
     = Request req (List (res -> Request req res))
 
 
-type MultiRequest req res a
-    = SimpleRequest (Request req res) (res -> a)
-    | ComplexRequest (Request req res) (res -> MultiRequest req res a)
-    | ShortCircuit a
+type MultiRequest req res outputRes
+    = SimpleRequest (Request req res) (res -> outputRes)
+    | ComplexRequest (Request req res) (res -> MultiRequest req res outputRes)
+    | ShortCircuit outputRes
 
 
 {-| Module messages.
@@ -65,7 +77,7 @@ type alias Config req res msg =
 
 {-| Turns the request's specialized response type into a different type.
 -}
-multiMap : (a -> b) -> MultiRequest req res a -> MultiRequest req res b
+multiMap : (outputResA -> outputResB) -> MultiRequest req res outputResA -> MultiRequest req res outputResB
 multiMap mapfun req =
     case req of
         SimpleRequest porterReq requestMapper ->
@@ -81,10 +93,10 @@ multiMap mapfun req =
 {-| Actually sends a (chain of) request(s).
 
 A final handler needs to be specified that turns the final result into a `msg`.
-This `msg` will be called with the final resulting `a` once the final response has returned.
+This `msg` will be called with the final resulting `outputRes` once the final response has returned.
 
 -}
-multiSend : Config req res msg -> (a -> msg) -> MultiRequest req res a -> Cmd msg
+multiSend : Config req res msg -> (outputRes -> msg) -> MultiRequest req res outputRes -> Cmd msg
 multiSend config msgHandler request =
     let
         mappedRequest =

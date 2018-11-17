@@ -5,8 +5,7 @@
     "license": "BSD-3-Clause",
     "version": "2.1.2",
     "exposed-modules": [
-        "Porter",
-        "Porter.Multi"
+        "Porter"
     ],
     "elm-version": "0.19.0 <= v < 0.20.0",
     "dependencies": {
