@@ -61,7 +61,7 @@ init =
       , response = ""
       }
       -- Send a request through porter, specifying the response handler directly
-      , Porter.send porterConfig Receive (Porter.request "Reverse me!")
+      , Porter.send porterConfig Receive (Porter.simpleRequest "Reverse me!")
     )
 
 
@@ -148,14 +148,21 @@ app.ports.outgoing.subscribe(msgWithId => {
 If you want to perform multiple requests where some of these request depend on responses from other requests, you can use `Porter.request` in combination with `Porter.andThen` and `Porter.sendRequest`.
 
 ```elm
-Porter.request ("Reverse me too!")
-  |> Porter.andThen (\reversedStr -> Porter.request (reversedStr ++ " The Quick Brown Fox!"))
-  |> Porter.andThen (\reversedStr -> Porter.request (reversedStr ++ " A man a plan a canal: panama"))
+Porter.simpleRequest ("Reverse me too!")
+  |> Porter.andThen (\reversedStr -> Porter.simpleRequest (reversedStr ++ " The Quick Brown Fox!"))
+  |> Porter.andThen (\reversedStr -> Porter.simpleRequest (reversedStr ++ " A man a plan a canal: panama"))
   |> Porter.sendRequest porterConfig Receive
 ```
 
 
 ## Changelog
+
+### 3.0
+
+- Merge `Porter.Multi` into `Porter` so now there is a single way to send requests.
+- Introduce `simpleRequest` in addition to `request` to cover the simple use-case when the response is not converted.
+- Introduce `succeed` to expose short-circuit functionality.
+- Remove `andThenResult` - use `succeed` and work with `Result` values directly instead.
 
 ###  2.0
 
